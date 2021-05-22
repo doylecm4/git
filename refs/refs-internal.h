@@ -149,9 +149,17 @@ struct ref_update {
 	const char refname[FLEX_ARRAY];
 };
 
-int refs_read_raw_ref(struct ref_store *ref_store,
-		      const char *refname, struct object_id *oid,
-		      struct strbuf *referent, unsigned int *type);
+int refs_read_raw_ref(struct ref_store *ref_store, const char *refname,
+		      struct object_id *oid, struct strbuf *referent,
+		      unsigned int *type, int *failure_errno);
+
+/* Like refs_resolve_ref_unsafe, but provide access to errno code that lead to a
+ * failure. */
+const char *refs_resolve_ref_unsafe_with_errno(struct ref_store *refs,
+					       const char *refname,
+					       int resolve_flags,
+					       struct object_id *oid,
+					       int *flags, int *failure_errno);
 
 /*
  * Write an error to `err` and return a nonzero value iff the same
@@ -453,6 +461,9 @@ void base_ref_iterator_free(struct ref_iterator *iter);
  */
 typedef int ref_iterator_advance_fn(struct ref_iterator *ref_iterator);
 
+/*
+ * Peels the current ref, returning 0 for success or -1 for failure.
+ */
 typedef int ref_iterator_peel_fn(struct ref_iterator *ref_iterator,
 				 struct object_id *peeled);
 
@@ -589,6 +600,10 @@ typedef int reflog_exists_fn(struct ref_store *ref_store, const char *refname);
 typedef int create_reflog_fn(struct ref_store *ref_store, const char *refname,
 			     int force_create, struct strbuf *err);
 typedef int delete_reflog_fn(struct ref_store *ref_store, const char *refname);
+
+/*
+ * `flags` accepts a bitmask of `expire_reflog_flags`.
+ */
 typedef int reflog_expire_fn(struct ref_store *ref_store,
 			     const char *refname, const struct object_id *oid,
 			     unsigned int flags,
@@ -617,11 +632,12 @@ typedef int reflog_expire_fn(struct ref_store *ref_store,
  * properly-formatted or even safe reference name. NEITHER INPUT NOR
  * OUTPUT REFERENCE NAMES ARE VALIDATED WITHIN THIS FUNCTION.
  *
- * Return 0 on success. If the ref doesn't exist, set errno to ENOENT
- * and return -1. If the ref exists but is neither a symbolic ref nor
- * an object ID, it is broken; set REF_ISBROKEN in type, set errno to
- * EINVAL, and return -1. If there is another error reading the ref,
- * set errno appropriately and return -1.
+ * Return 0 on success. If the ref doesn't exist, set failure_errno to ENOENT
+ * and return -1. If the ref exists but is neither a symbolic ref nor an object
+ * ID, it is broken; set REF_ISBROKEN in type, and return -1. For the files
+ * backend, EISDIR and ENOTDIR may be set if the ref name is a directory. If
+ * there is another error reading the ref, set failure_errno appropriately and
+ * return -1.
  *
  * Backend-specific flags might be set in type as well, regardless of
  * outcome.
@@ -635,9 +651,9 @@ typedef int reflog_expire_fn(struct ref_store *ref_store,
  * - in all other cases, referent will be untouched, and therefore
  *   refname will still be valid and unchanged.
  */
-typedef int read_raw_ref_fn(struct ref_store *ref_store,
-			    const char *refname, struct object_id *oid,
-			    struct strbuf *referent, unsigned int *type);
+typedef int read_raw_ref_fn(struct ref_store *ref_store, const char *refname,
+			    struct object_id *oid, struct strbuf *referent,
+			    unsigned int *type, int *failure_errno);
 
 struct ref_storage_be {
 	struct ref_storage_be *next;
@@ -669,6 +685,7 @@ struct ref_storage_be {
 };
 
 extern struct ref_storage_be refs_be_files;
+extern struct ref_storage_be refs_be_reftable;
 extern struct ref_storage_be refs_be_packed;
 
 /*

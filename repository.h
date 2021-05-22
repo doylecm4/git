@@ -44,6 +44,8 @@ struct repo_settings {
 
 	unsigned command_requires_full_index:1,
 		 sparse_index:1;
+
+	int use_builtin_fsmonitor;
 };
 
 struct repository {
@@ -80,6 +82,9 @@ struct repository {
 	 * the ref object.
 	 */
 	struct ref_store *refs_private;
+
+	/* The format to use for the ref database. */
+	char *ref_storage_format;
 
 	/*
 	 * Contains path to often used file names.
